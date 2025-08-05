@@ -387,30 +387,6 @@ void CHyprNstackLayout::calculateWorkspace(PHLWORKSPACE PWORKSPACE) {
     if (!PMONITOR)
         return;
 
-    if (PWORKSPACE->m_hasFullscreenWindow) {
-        // massive hack from the fullscreen func
-        const auto PFULLWINDOW = PWORKSPACE->getFullscreenWindow();
-
-        if (PWORKSPACE->m_fullscreenMode == FSMODE_FULLSCREEN) {
-            *PFULLWINDOW->m_realPosition = PMONITOR->m_position;
-            *PFULLWINDOW->m_realSize     = PMONITOR->m_size;
-        } else if (PWORKSPACE->m_fullscreenMode == FSMODE_MAXIMIZED) {
-
-            SNstackNodeData fakeNode;
-            fakeNode.pWindow                = PFULLWINDOW;
-            fakeNode.position               = PMONITOR->m_position + PMONITOR->m_reservedTopLeft;
-            fakeNode.size                   = PMONITOR->m_size - PMONITOR->m_reservedTopLeft - PMONITOR->m_reservedBottomRight;
-            fakeNode.workspaceID            = PWORKSPACE->m_id;
-            PFULLWINDOW->m_position         = fakeNode.position;
-            PFULLWINDOW->m_size             = fakeNode.size;
-            fakeNode.ignoreFullscreenChecks = true;
-
-            applyNodeDataToWindow(&fakeNode);
-        }
-
-        // if has fullscreen, don't calculate the rest
-        return;
-    }
     const auto      PWORKSPACEDATA = getMasterWorkspaceData(PWORKSPACE->m_id);
     auto            NUMSTACKS      = PWORKSPACEDATA->m_iStackCount;
 
@@ -419,6 +395,47 @@ void CHyprNstackLayout::calculateWorkspace(PHLWORKSPACE PWORKSPACE) {
 
     eColOrientation orientation = PWORKSPACEDATA->orientation;
     eColOrder       order       = PWORKSPACEDATA->order;
+
+    auto            MCONTAINERPOS  = Vector2D(0.0f, 0.0f);
+    auto            MCONTAINERSIZE = Vector2D(0.0f, 0.0f);
+    auto            MARGIN         = Vector2D(0.0f, 0.0f);
+    auto            TOPLEFT        = PMONITOR->m_reservedTopLeft;
+    auto            BOTTOMRIGHT    = PMONITOR->m_reservedBottomRight;
+    if (PWORKSPACEDATA->x_factor > 0.0f && PWORKSPACEDATA->x_factor < 1.0f) {
+        MARGIN = Vector2D(orientation % 2 == 0 ? (1.0f - PWORKSPACEDATA->x_factor) * PMONITOR->m_size.x / 2.f : 0.0f,
+                          orientation % 2 == 1 ? (1.0f - PWORKSPACEDATA->x_factor) * PMONITOR->m_size.y / 2.f : 0.0f);
+        TOPLEFT += MARGIN;
+        BOTTOMRIGHT += MARGIN;
+    }
+
+    if (PWORKSPACE->m_hasFullscreenWindow) {
+        // massive hack from the fullscreen func
+        const auto PFULLWINDOW = PWORKSPACE->getFullscreenWindow();
+
+        if (PWORKSPACE->m_fullscreenMode == FSMODE_FULLSCREEN) {
+            *PFULLWINDOW->m_realPosition = PMONITOR->m_position;
+            *PFULLWINDOW->m_realSize     = PMONITOR->m_size;
+        } else if (PWORKSPACE->m_fullscreenMode == FSMODE_MAXIMIZED) {
+            for (auto& n : m_lMasterNodesData) {
+                if (n.workspaceID != PWORKSPACE->m_id)
+                    continue;
+
+                SNstackNodeData fakeNode;
+                fakeNode.pWindow                = n.pWindow;
+                fakeNode.position               = PMONITOR->m_position + TOPLEFT;
+                fakeNode.size                   = PMONITOR->m_size - TOPLEFT - BOTTOMRIGHT;
+                fakeNode.workspaceID            = PWORKSPACE->m_id;
+                PFULLWINDOW->m_position         = fakeNode.position;
+                PFULLWINDOW->m_size             = fakeNode.size;
+                fakeNode.ignoreFullscreenChecks = true;
+
+                applyNodeDataToWindow(&fakeNode);
+            }
+        }
+
+        // if has fullscreen, don't calculate the rest
+        return;
+    }
 
     if (!PMASTERNODE)
         return;
@@ -448,17 +465,6 @@ void CHyprNstackLayout::calculateWorkspace(PHLWORKSPACE PWORKSPACE) {
         }
     }
 
-    auto MCONTAINERPOS  = Vector2D(0.0f, 0.0f);
-    auto MCONTAINERSIZE = Vector2D(0.0f, 0.0f);
-    auto MARGIN         = Vector2D(0.0f, 0.0f);
-    auto TOPLEFT        = PMONITOR->m_reservedTopLeft;
-    auto BOTTOMRIGHT    = PMONITOR->m_reservedBottomRight;
-    if (PWORKSPACEDATA->x_factor > 0.0f && PWORKSPACEDATA->x_factor < 1.0f) {
-        MARGIN = Vector2D(orientation % 2 == 0 ? (1.0f - PWORKSPACEDATA->x_factor) * PMONITOR->m_size.x / 2.f : 0.0f,
-                          orientation % 2 == 1 ? (1.0f - PWORKSPACEDATA->x_factor) * PMONITOR->m_size.y / 2.f : 0.0f);
-        TOPLEFT += MARGIN;
-        BOTTOMRIGHT += MARGIN;
-    }
     if (ONLYMASTERS) {
         if (centerMasterWindow) {
 
