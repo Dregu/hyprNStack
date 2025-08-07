@@ -110,15 +110,17 @@ static void applyWorkspaceLayoutOptions(SNstackWorkspaceData* wsData) {
         }
     }
 
-    static auto* const MFACT   = (Hyprlang::FLOAT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:nstack:layout:mfact")->getDataStaticPtr();
-    auto               wsmfact = **MFACT;
-    if (wslayoutopts.contains("nstack-mfact")) {
-        std::string mfactstr = wslayoutopts.at("nstack-mfact");
-        try {
-            wsmfact = std::stof(mfactstr);
-        } catch (std::exception& e) { Debug::log(ERR, "Nstack layoutopt nstack-mfact format error: {}", e.what()); }
+    if (!wsData->overrides.contains("mfact")) {
+        static auto* const MFACT   = (Hyprlang::FLOAT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:nstack:layout:mfact")->getDataStaticPtr();
+        auto               wsmfact = **MFACT;
+        if (wslayoutopts.contains("nstack-mfact")) {
+            std::string mfactstr = wslayoutopts.at("nstack-mfact");
+            try {
+                wsmfact = std::stof(mfactstr);
+            } catch (std::exception& e) { Debug::log(ERR, "Nstack layoutopt nstack-mfact format error: {}", e.what()); }
+        }
+        wsData->master_factor = wsmfact;
     }
-    wsData->master_factor = wsmfact;
 
     static auto* const SMFACT   = (Hyprlang::FLOAT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:nstack:layout:single_mfact")->getDataStaticPtr();
     auto               wssmfact = **SMFACT;
@@ -1379,6 +1381,44 @@ std::any CHyprNstackLayout::layoutMessage(SLayoutMessageHeader header, std::stri
         PWORKSPACEDATA->overrides.emplace("order");
         recalculateMonitor(PWINDOW->monitorID());
         refreshWindows(PWINDOW);
+    } else if (command == "mfact") {
+        const auto PWINDOW = header.pWindow;
+        if (!PWINDOW)
+            return 0;
+        const auto PWORKSPACEDATA = getMasterWorkspaceData(PWINDOW->workspaceID());
+        if (!PWORKSPACEDATA)
+            return 0;
+        if (vars.size() >= 2) {
+            try {
+                auto wsmfact                  = std::stof(vars[1]);
+                PWORKSPACEDATA->master_factor = wsmfact;
+                PWORKSPACEDATA->overrides.emplace("mfact");
+                recalculateMonitor(PWINDOW->monitorID());
+            } catch (std::exception& e) { Debug::log(ERR, "Nstack layoutmsg mfact format error: {}", e.what()); }
+        } else {
+            PWORKSPACEDATA->overrides.erase("mfact");
+            recalculateMonitor(PWINDOW->monitorID());
+        }
+    } else if (command == "togglemfact") {
+        const auto PWINDOW = header.pWindow;
+        if (!PWINDOW)
+            return 0;
+        const auto PWORKSPACEDATA = getMasterWorkspaceData(PWINDOW->workspaceID());
+        if (!PWORKSPACEDATA)
+            return 0;
+        if (vars.size() >= 2) {
+            try {
+                auto wsmfact = std::stof(vars[1]);
+                if (PWORKSPACEDATA->master_factor == wsmfact) {
+                    PWORKSPACEDATA->master_factor = 0;
+                    PWORKSPACEDATA->overrides.erase("mfact");
+                } else {
+                    PWORKSPACEDATA->master_factor = wsmfact;
+                    PWORKSPACEDATA->overrides.emplace("mfact");
+                }
+                recalculateMonitor(PWINDOW->monitorID());
+            } catch (std::exception& e) { Debug::log(ERR, "Nstack layoutmsg togglemfact format error: {}", e.what()); }
+        }
     }
 
     return 0;
